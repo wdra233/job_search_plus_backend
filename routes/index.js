@@ -1,7 +1,7 @@
 var express = require('express');
 var router = express.Router();
 const md5 = require('blueimp-md5');
-const {UserModel} = require('../db/models');
+const {UserModel, ChatModel} = require('../db/models');
 
 // filter掉password和__v property
 const filter = '-password -__v';
@@ -58,5 +58,43 @@ router.post('/update', function(req, res) {
     }
   })
 
+});
+
+router.get('/user', function(req, res) {
+  const userid = req.cookies.userid;
+  if (!userid) {
+   return res.send({code: 1, msg: 'Please login first'});
+  }
+
+  UserModel.findOne({_id: userid}, filter, function(err, user) {
+    return res.send({code: 0, data: user});
+  })
+
 })
+
+router.get('/msglist', function(req, res) {
+  const userid = req.cookies.userid
+
+  UserModel.find(function(err, userDocs) {
+    const users = userDocs.reduce((users, user) => {
+        users[user._id] = {username: user.username, header: user.header}
+        return users;
+    }, {})
+
+    ChatModel.find({'&or': [{from: userid}, {to: userid}]}, filter, (err, chatMsgs) => {
+        res.send({code: 0, data: {users, chatMsgs}})
+    })
+  })
+})
+
+router.post('/readMsg', function(req, res) {
+  const from = req.body.from
+  const to = req.cookies.userid
+
+  ChatModel.update({from, to, read: false}, {read: true}, {multi: true}, (err, docs) => {
+    console.log('/readMsg', docs)
+    res.send({code: 0, data: docs.nModified}) //更新的数量
+  })
+})
+
 module.exports = router;
